@@ -683,43 +683,227 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
      * External resim optimizasyonu
      */
     private function optimize_external_image($image_url, $quality, $webp_support) {
+        if (empty($image_url)) {
+            return '';
+        }
+        
+        // Döngüyü engellemek için cache kontrolü
+        $cache_key = 'image_optimize_' . md5($image_url . $quality . $webp_support);
+        $cached_result = get_transient($cache_key);
+        
+        if ($cached_result !== false) {
+            error_log('Link Meta Widget: Using cached optimized image: ' . $cached_result);
+            return $cached_result;
+        }
+        
         // Resim boyutunu küçült
         $width = 300;
         $height = 200;
         
-        // CORS sorununu çözmek için proxy servisi kullan
+        // CORS sorununu çözmek için çalışan proxy servisleri
         $proxy_services = [
+            // Ana proxy servisleri (güvenilir)
             'https://images.weserv.nl/?url=' . urlencode($image_url) . '&w=' . $width . '&h=' . $height . '&q=' . $quality . '&f=' . ($webp_support ? 'webp' : 'auto'),
-            'https://cors-anywhere.herokuapp.com/' . $image_url,
-            'https://api.allorigins.win/raw?url=' . urlencode($image_url)
+            
+            // Çalışan alternatif proxy servisleri
+            'https://api.codetabs.com/v1/proxy?quest=' . urlencode($image_url),
+            'https://cors.bridged.cc/' . $image_url,
+            
+            // Son çare: Orijinal URL (CORS hatası olabilir ama denenecek)
+            $image_url
         ];
         
-        // İlk çalışan proxy servisini kullan
-        foreach ($proxy_services as $proxy_url) {
+        $result = $image_url; // Varsayılan olarak orijinal URL
+        
+        // İlk çalışan proxy servisini kullan (maksimum 3 deneme)
+        $max_attempts = min(3, count($proxy_services));
+        for ($i = 0; $i < $max_attempts; $i++) {
+            $proxy_url = $proxy_services[$i];
+            
             if ($this->test_image_url($proxy_url)) {
-                return $proxy_url;
+                error_log('Link Meta Widget: Using proxy: ' . $proxy_url);
+                $result = $proxy_url;
+                break;
+            }
+            
+            // Her deneme arasında kısa bekleme
+            if ($i < $max_attempts - 1) {
+                usleep(100000); // 0.1 saniye bekle
             }
         }
         
-        // Hiçbiri çalışmazsa orijinal URL'yi döndür
-        return $image_url;
+        // Sonucu cache'le (1 saat)
+        set_transient($cache_key, $result, HOUR_IN_SECONDS);
+        
+        if ($result === $image_url) {
+            error_log('Link Meta Widget: All proxies failed, using original URL: ' . $image_url);
+        }
+        
+        return $result;
     }
 
     /**
      * Resim URL'sinin çalışıp çalışmadığını test et
      */
     private function test_image_url($url) {
+        // URL'yi temizle
+        $url = esc_url_raw($url);
+        
+        if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+        
+        // Döngüyü engellemek için cache kontrolü
+        $cache_key = 'image_test_' . md5($url);
+        $cached_result = get_transient($cache_key);
+        
+        if ($cached_result !== false) {
+            error_log('Link Meta Widget: Using cached test result for ' . $url . ' - ' . ($cached_result ? 'SUCCESS' : 'FAILED'));
+            return $cached_result;
+        }
+        
+        // Önce HEAD isteği dene
         $response = wp_remote_head($url, [
-            'timeout' => 5,
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'timeout' => 5, // Timeout'u kısalt
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'headers' => [
+                'Accept' => 'image/*,*/*;q=0.8',
+                'Accept-Language' => 'tr-TR,tr;q=0.9,en;q=0.8',
+                'Cache-Control' => 'no-cache',
+                'Connection' => 'keep-alive'
+            ],
+            'sslverify' => false,
+            'redirection' => 1 // Yönlendirme sayısını azalt
         ]);
         
         if (is_wp_error($response)) {
+            // HEAD başarısız olursa GET isteği dene (sadece ilk 512 byte)
+            $response = wp_remote_get($url, [
+                'timeout' => 5,
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'headers' => [
+                    'Range' => 'bytes=0-511', // Sadece ilk 512 byte
+                    'Accept' => 'image/*,*/*;q=0.8'
+                ],
+                'sslverify' => false,
+                'redirection' => 1
+            ]);
+        }
+        
+        if (is_wp_error($response)) {
+            error_log('Link Meta Widget: Proxy test failed for ' . $url . ' - ' . $response->get_error_message());
+            // Başarısız sonucu 5 dakika cache'le
+            set_transient($cache_key, false, 5 * MINUTE_IN_SECONDS);
             return false;
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
-        return $response_code === 200;
+        $content_type = wp_remote_retrieve_header($response, 'content-type');
+        
+        // 200-299 arası kodlar kabul edilir
+        $is_success = ($response_code >= 200 && $response_code < 300);
+        
+        // İçerik türü kontrolü (daha esnek)
+        $is_image = false;
+        if ($content_type) {
+            $is_image = (
+                strpos($content_type, 'image/') === 0 || 
+                strpos($content_type, 'application/octet-stream') === 0 ||
+                strpos($content_type, 'binary') !== false
+            );
+        } else {
+            // Content-Type yoksa, URL uzantısına bak
+            $extension = strtolower(pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
+            $image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+            $is_image = in_array($extension, $image_extensions);
+        }
+        
+        $result = false;
+        
+        if ($is_success && $is_image) {
+            error_log('Link Meta Widget: Proxy test successful for ' . $url . ' (Code: ' . $response_code . ', Type: ' . $content_type . ')');
+            $result = true;
+        } elseif ($url === $this->get_original_image_url($url)) {
+            // Eğer proxy değilse ve orijinal URL ise, CORS hatası olsa bile kabul et
+            error_log('Link Meta Widget: Accepting original URL despite potential CORS issues: ' . $url);
+            $result = true;
+        } else {
+            error_log('Link Meta Widget: Proxy test failed for ' . $url . ' (Code: ' . $response_code . ', Type: ' . $content_type . ')');
+        }
+        
+        // Sonucu cache'le (başarılı ise 1 saat, başarısız ise 5 dakika)
+        $cache_duration = $result ? HOUR_IN_SECONDS : (5 * MINUTE_IN_SECONDS);
+        set_transient($cache_key, $result, $cache_duration);
+        
+        return $result;
+    }
+    
+    /**
+     * Orijinal resim URL'sini al
+     */
+    private function get_original_image_url($url) {
+        // Proxy URL'lerini temizle ve orijinal URL'yi bul
+        $original_url = $url;
+        
+        // Weserv proxy'sini temizle
+        if (strpos($url, 'images.weserv.nl/?url=') === 0) {
+            $original_url = urldecode(substr($url, strpos($url, 'url=') + 4));
+        }
+        // Codetabs proxy'sini temizle
+        elseif (strpos($url, 'api.codetabs.com/v1/proxy?quest=') === 0) {
+            $original_url = urldecode(substr($url, strpos($url, 'quest=') + 6));
+        }
+        // Bridged proxy'sini temizle
+        elseif (strpos($url, 'cors.bridged.cc/') === 0) {
+            $original_url = substr($url, strlen('https://cors.bridged.cc/'));
+        }
+        // AllOrigins proxy'sini temizle
+        elseif (strpos($url, 'api.allorigins.win/raw?url=') === 0) {
+            $original_url = urldecode(substr($url, strpos($url, 'url=') + 4));
+        }
+        
+        return $original_url;
+    }
+    
+    /**
+     * CORS hatası olan resimler için özel işlem
+     */
+    private function handle_cors_image($original_image, $optimized_image) {
+        if (empty($original_image)) {
+            return false;
+        }
+        
+        // Döngüyü engellemek için cache kontrolü
+        $cache_key = 'cors_handle_' . md5($original_image . $optimized_image);
+        $cached_result = get_transient($cache_key);
+        
+        if ($cached_result !== false) {
+            error_log('Link Meta Widget: Using cached CORS result: ' . $cached_result);
+            return $cached_result;
+        }
+        
+        $result = $optimized_image; // Varsayılan olarak optimize edilmiş resim
+        
+        // Eğer optimize edilmiş resim orijinal ile aynıysa, CORS hatası olabilir
+        if ($original_image === $optimized_image) {
+            // Yerel proxy'yi dene (sadece bir kez)
+            $local_proxy_url = 'https://' . $_SERVER['HTTP_HOST'] . '/wp-content/plugins/elementor-ozel-tasarim/proxy.php?url=' . urlencode($original_image);
+            
+            // Yerel proxy'yi test et (timeout ile)
+            if ($this->test_image_url($local_proxy_url)) {
+                $result = $local_proxy_url;
+                error_log('Link Meta Widget: Using local proxy for CORS: ' . $local_proxy_url);
+            } else {
+                // Yerel proxy de çalışmazsa, orijinal URL'yi döndür (CORS hatası olabilir)
+                $result = $original_image;
+                error_log('Link Meta Widget: CORS fallback to original URL: ' . $original_image);
+            }
+        }
+        
+        // Sonucu cache'le (30 dakika)
+        set_transient($cache_key, $result, 30 * MINUTE_IN_SECONDS);
+        
+        return $result;
     }
 
     /**
@@ -795,31 +979,76 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
             return false;
         }
 
-        // HTTP isteği yap
-        $response = wp_remote_get($url, [
-            'timeout' => 30,
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'headers' => [
-                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language' => 'tr-TR,tr;q=0.9,en;q=0.8',
-                'Accept-Encoding' => 'gzip, deflate, br',
-                'Cache-Control' => 'no-cache',
-                'Pragma' => 'no-cache',
-                'Connection' => 'keep-alive',
-                'Upgrade-Insecure-Requests' => '1',
+        // HTTP isteği yap - birden fazla yöntem dene
+        $request_methods = [
+            // Yöntem 1: Doğrudan istek
+            [
+                'timeout' => 30,
+                'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'headers' => [
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language' => 'tr-TR,tr;q=0.9,en;q=0.8',
+                    'Accept-Encoding' => 'gzip, deflate, br',
+                    'Cache-Control' => 'no-cache',
+                    'Pragma' => 'no-cache',
+                    'Connection' => 'keep-alive',
+                    'Upgrade-Insecure-Requests' => '1',
+                ],
+                'sslverify' => false,
+                'redirection' => 5,
             ],
-            'sslverify' => false, // SSL sertifika kontrolünü atla
-            'redirection' => 5, // Maksimum 5 yönlendirme
-        ]);
+            // Yöntem 2: Basit istek
+            [
+                'timeout' => 20,
+                'user-agent' => 'Mozilla/5.0 (compatible; LinkMetaBot/1.0)',
+                'sslverify' => false,
+                'redirection' => 3,
+            ],
+            // Yöntem 3: CURL benzeri istek
+            [
+                'timeout' => 25,
+                'user-agent' => 'curl/7.68.0',
+                'headers' => [
+                    'Accept' => '*/*',
+                ],
+                'sslverify' => false,
+                'redirection' => 2,
+            ]
+        ];
+        
+        $response = null;
+        $last_error = '';
+        
+        foreach ($request_methods as $index => $args) {
+            $response = wp_remote_get($url, $args);
+            
+            if (!is_wp_error($response)) {
+                $response_code = wp_remote_retrieve_response_code($response);
+                if ($response_code >= 200 && $response_code < 300) {
+                    error_log('Link Meta Widget: Request successful with method ' . ($index + 1) . ' for URL: ' . $url);
+                    break;
+                }
+            } else {
+                $last_error = $response->get_error_message();
+                error_log('Link Meta Widget: Request method ' . ($index + 1) . ' failed: ' . $last_error);
+            }
+            
+            $response = null;
+        }
 
         if (is_wp_error($response)) {
             error_log('Link Meta Widget Error: ' . $response->get_error_message());
             return false;
         }
 
+        if (!$response) {
+            error_log('Link Meta Widget: All request methods failed. Last error: ' . $last_error);
+            return false;
+        }
+
         $response_code = wp_remote_retrieve_response_code($response);
-        if ($response_code !== 200) {
-            error_log('Link Meta Widget HTTP Error: ' . $response_code);
+        if ($response_code < 200 || $response_code >= 300) {
+            error_log('Link Meta Widget HTTP Error: ' . $response_code . ' for URL: ' . $url);
             return false;
         }
 
@@ -961,7 +1190,10 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
 
         // Resim optimizasyonu
         $optimized_image = $this->optimize_image($meta_data['image'], $settings);
-        $image_attributes = $this->get_image_attributes($optimized_image, $meta_data['title'], $settings);
+        
+        // CORS hatası için özel işlem
+        $final_image = $this->handle_cors_image($meta_data['image'], $optimized_image);
+        $image_attributes = $this->get_image_attributes($final_image, $meta_data['title'], $settings);
         
         // Düzen sınıfları
         $layout_class = 'ozel-link-meta-' . $settings['resim_konumu'];
@@ -969,7 +1201,7 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
 
         ?>
         <div class="ozel-link-meta <?php echo esc_attr($layout_class); ?>">
-            <?php if (!empty($optimized_image)): ?>
+            <?php if (!empty($final_image)): ?>
                 <div class="ozel-link-meta-resim">
                     <?php if ($settings['webp_destegi'] === 'yes' && !empty($image_attributes['data-webp'])): ?>
                         <picture>

@@ -290,6 +290,10 @@
      * Link Meta Veri Çekme Fonksiyonu
      */
     function initLinkMetaCekme() {
+        // Döngüyü engellemek için işlem durumu takibi
+        let isProcessing = false;
+        let lastProcessedUrl = '';
+        
         // Veri çek butonuna tıklandığında
         $(document).on('click', '[data-event="ozel_link_meta_cek"]', function(e) {
             e.preventDefault();
@@ -302,6 +306,22 @@
                 showStatusMessage('Lütfen önce bir URL girin', 'error');
                 return;
             }
+            
+            // Döngü kontrolü
+            if (isProcessing) {
+                showStatusMessage('İşlem devam ediyor, lütfen bekleyin...', 'loading');
+                return;
+            }
+            
+            // Aynı URL tekrar işleniyorsa engelle
+            if (lastProcessedUrl === urlInput) {
+                showStatusMessage('Bu URL zaten işlendi, farklı bir URL deneyin', 'error');
+                return;
+            }
+            
+            // İşlem durumunu işaretle
+            isProcessing = true;
+            lastProcessedUrl = urlInput;
             
             // Loading durumu
             $button.text('Veri Çekiliyor...').prop('disabled', true);
@@ -316,7 +336,7 @@
                     url: urlInput,
                     nonce: elementorCommon.config.ajax.nonce
                 },
-                timeout: 30000, // 30 saniye timeout
+                timeout: 15000, // 15 saniye timeout (döngüyü engellemek için kısaltıldı)
                 success: function(response) {
                     if (response.success) {
                         const data = response.data;
@@ -423,18 +443,35 @@
                     
                     if (status === 'timeout') {
                         errorMessage = 'İstek zaman aşımına uğradı';
-                        errorDetails = 'Site yanıt vermiyor olabilir';
+                        errorDetails = 'Site yanıt vermiyor olabilir. Lütfen farklı bir URL deneyin.';
                     } else if (xhr.status === 0) {
                         errorMessage = 'Bağlantı hatası';
-                        errorDetails = 'İnternet bağlantınızı kontrol edin';
+                        errorDetails = 'İnternet bağlantınızı kontrol edin veya proxy servisleri çalışmıyor olabilir. CORS hatası da olabilir.';
+                    } else if (xhr.status === 403) {
+                        errorMessage = 'Erişim engellendi';
+                        errorDetails = 'Site bu tür isteklere izin vermiyor. Manuel veri girişi yapabilirsiniz.';
+                    } else if (xhr.status === 404) {
+                        errorMessage = 'Sayfa bulunamadı';
+                        errorDetails = 'URL doğru değil veya sayfa mevcut değil.';
+                    } else if (xhr.status === 500) {
+                        errorMessage = 'Sunucu hatası';
+                        errorDetails = 'Hedef sitede bir sorun var. Daha sonra tekrar deneyin.';
                     } else {
                         errorDetails = 'HTTP ' + xhr.status + ': ' + error;
                     }
+                    
+                    // Debug bilgileri ekle
+                    errorDetails += '\n\nDebug Bilgileri:';
+                    errorDetails += '\nStatus: ' + status;
+                    errorDetails += '\nError: ' + error;
+                    errorDetails += '\nResponse: ' + (xhr.responseText ? xhr.responseText.substring(0, 200) + '...' : 'Boş yanıt');
                     
                     showStatusMessage(errorMessage, 'error', errorDetails);
                 },
                 complete: function() {
                     $button.text('Meta Verileri Çek').prop('disabled', false);
+                    // İşlem durumunu sıfırla
+                    isProcessing = false;
                 }
             });
         });
