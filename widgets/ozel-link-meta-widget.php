@@ -585,7 +585,7 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
     /**
      * Resim optimizasyonu yap
      */
-    private function optimize_image($image_url, $settings) {
+    public function optimize_image($image_url, $settings) {
         if (empty($image_url) || $settings['resim_optimizasyonu'] !== 'yes') {
             return $image_url;
         }
@@ -687,15 +687,39 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
         $width = 300;
         $height = 200;
         
-        // WordPress resim boyutlandırma servisi kullan
-        $optimized_url = add_query_arg([
-            'w' => $width,
-            'h' => $height,
-            'q' => $quality,
-            'f' => $webp_support ? 'webp' : 'auto'
-        ], 'https://images.weserv.nl/?url=' . urlencode($image_url));
+        // CORS sorununu çözmek için proxy servisi kullan
+        $proxy_services = [
+            'https://images.weserv.nl/?url=' . urlencode($image_url) . '&w=' . $width . '&h=' . $height . '&q=' . $quality . '&f=' . ($webp_support ? 'webp' : 'auto'),
+            'https://cors-anywhere.herokuapp.com/' . $image_url,
+            'https://api.allorigins.win/raw?url=' . urlencode($image_url)
+        ];
         
-        return $optimized_url;
+        // İlk çalışan proxy servisini kullan
+        foreach ($proxy_services as $proxy_url) {
+            if ($this->test_image_url($proxy_url)) {
+                return $proxy_url;
+            }
+        }
+        
+        // Hiçbiri çalışmazsa orijinal URL'yi döndür
+        return $image_url;
+    }
+
+    /**
+     * Resim URL'sinin çalışıp çalışmadığını test et
+     */
+    private function test_image_url($url) {
+        $response = wp_remote_head($url, [
+            'timeout' => 5,
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        ]);
+        
+        if (is_wp_error($response)) {
+            return false;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        return $response_code === 200;
     }
 
     /**

@@ -322,26 +322,77 @@
                         const data = response.data;
                         
                         // Çekilen veriyi form alanlarına doldur
-                        $widget.find('input[data-setting="cekilen_baslik"]').val(data.title);
-                        $widget.find('textarea[data-setting="cekilen_aciklama"]').val(data.description);
+                        const $baslikInput = $widget.find('input[data-setting="cekilen_baslik"]');
+                        const $aciklamaInput = $widget.find('textarea[data-setting="cekilen_aciklama"]');
+                        
+                        if ($baslikInput.length) {
+                            $baslikInput.val(data.title).trigger('input');
+                        }
+                        
+                        if ($aciklamaInput.length) {
+                            $aciklamaInput.val(data.description).trigger('input');
+                        }
                         
                         if (data.image) {
                             // Resim alanını güncelle
                             const $imageInput = $widget.find('input[data-setting="cekilen_resim"]');
-                            $imageInput.val(data.image);
+                            if ($imageInput.length) {
+                                $imageInput.val(data.image).trigger('change');
+                            }
                             
-                            // Resim önizlemesini güncelle
-                            const $imagePreview = $widget.find('.elementor-control-media__preview img');
-                            if ($imagePreview.length) {
-                                $imagePreview.attr('src', data.image);
+                            // Elementor media control'ünü güncelle
+                            const $mediaControl = $widget.find('.elementor-control-media');
+                            if ($mediaControl.length) {
+                                // Media control'ün değerini güncelle
+                                const mediaData = {
+                                    id: 0,
+                                    url: data.image,
+                                    alt: data.title || ''
+                                };
+                                
+                                // Elementor'un media control API'sini kullan
+                                if (typeof elementor !== 'undefined' && elementor.controls) {
+                                    const control = elementor.controls.getControl($mediaControl.data('setting'));
+                                    if (control) {
+                                        control.setValue(mediaData);
+                                    }
+                                }
+                                
+                                // Resim önizlemesini güncelle
+                                const $imagePreview = $mediaControl.find('.elementor-control-media__preview img');
+                                if ($imagePreview.length) {
+                                    $imagePreview.attr('src', data.image);
+                                } else {
+                                    // Önizleme yoksa oluştur
+                                    const $previewContainer = $mediaControl.find('.elementor-control-media__preview');
+                                    if ($previewContainer.length) {
+                                        $previewContainer.html('<img src="' + data.image + '" alt="' + (data.title || '') + '">');
+                                    }
+                                }
                             }
                         }
                         
                         // Widget önizlemesini güncelle
                         updateWidgetPreview($widget);
                         
-                        showStatusMessage('Meta veriler başarıyla çekildi!', 'success', 
-                            'Başlık: ' + data.title + ' | Resim: ' + (data.image ? 'Var' : 'Yok'));
+                        // Başarı mesajı
+                        let successMessage = 'Meta veriler başarıyla çekildi!';
+                        let successDetails = 'Başlık: ' + data.title;
+                        
+                        if (data.image) {
+                            successDetails += ' | Resim: Var';
+                            if (data.image_optimized) {
+                                successDetails += ' (Optimize edildi)';
+                            }
+                        } else {
+                            successDetails += ' | Resim: Yok';
+                        }
+                        
+                        if (data.domain) {
+                            successDetails += ' | Domain: ' + data.domain;
+                        }
+                        
+                        showStatusMessage(successMessage, 'success', successDetails);
                     } else {
                         const errorData = response.data || {};
                         let errorMessage = 'Veri çekilemedi';
@@ -353,6 +404,14 @@
                         
                         if (errorData.possible_causes) {
                             errorDetails = 'Olası nedenler: ' + errorData.possible_causes.join(', ');
+                        }
+                        
+                        if (errorData.suggestions) {
+                            errorDetails += '\nÖneriler: ' + errorData.suggestions.join(', ');
+                        }
+                        
+                        if (errorData.debug) {
+                            errorDetails += '\nDebug: ' + JSON.stringify(errorData.debug, null, 2);
                         }
                         
                         showStatusMessage(errorMessage, 'error', errorDetails);
@@ -394,7 +453,9 @@
             $messageDiv.text(message);
             
             if (details) {
-                $detailsDiv.text(details);
+                // Uzun detayları daha okunabilir hale getir
+                const formattedDetails = details.replace(/\n/g, '<br>');
+                $detailsDiv.html(formattedDetails);
             } else {
                 $detailsDiv.text('');
             }
@@ -403,11 +464,41 @@
             $statusDiv.removeClass('success error loading');
             $statusDiv.addClass(type);
             
-            // Başarılı ise 3 saniye sonra gizle
+            // CSS stilleri ekle
+            $statusDiv.css({
+                'padding': '15px',
+                'border-radius': '5px',
+                'margin': '10px 0',
+                'font-size': '14px',
+                'line-height': '1.4'
+            });
+            
             if (type === 'success') {
+                $statusDiv.css({
+                    'background-color': '#d4edda',
+                    'border': '1px solid #c3e6cb',
+                    'color': '#155724'
+                });
+                // Başarılı ise 5 saniye sonra gizle
                 setTimeout(() => {
                     $statusDiv.fadeOut();
-                }, 3000);
+                }, 5000);
+            } else if (type === 'error') {
+                $statusDiv.css({
+                    'background-color': '#f8d7da',
+                    'border': '1px solid #f5c6cb',
+                    'color': '#721c24'
+                });
+                // Hata mesajı 10 saniye sonra gizle
+                setTimeout(() => {
+                    $statusDiv.fadeOut();
+                }, 10000);
+            } else if (type === 'loading') {
+                $statusDiv.css({
+                    'background-color': '#d1ecf1',
+                    'border': '1px solid #bee5eb',
+                    'color': '#0c5460'
+                });
             }
         } else {
             // Fallback alert
