@@ -147,7 +147,7 @@
                             img.src = img.dataset.webp;
                         } else if (img.dataset.src) {
                             img.src = img.dataset.src;
-                        } else if (img.src) {
+                        } else if (img.src && img.src !== '') {
                             // Zaten src varsa kullan
                             img.classList.remove('lazy');
                         }
@@ -161,9 +161,12 @@
                 threshold: 0.01
             });
 
-            document.querySelectorAll('img[data-src], img[loading="lazy"]').forEach(img => {
-                imageObserver.observe(img);
-            });
+            const lazyImages = document.querySelectorAll('img[data-src], img[loading="lazy"]');
+            if (lazyImages.length > 0) {
+                lazyImages.forEach(img => {
+                    imageObserver.observe(img);
+                });
+            }
         }
     }
 
@@ -171,12 +174,16 @@
      * WebP desteği kontrolü
      */
     function supportsWebP() {
-        const webP = new Image();
-        webP.onload = webP.onerror = function() {
-            return webP.height === 2;
-        };
-        webP.src = 'data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA';
-        return false; // Varsayılan olarak false döndür
+        // WebP desteği kontrolü için canvas kullan
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        
+        try {
+            return canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+        } catch (e) {
+            return false;
+        }
     }
 
     /**
@@ -305,7 +312,10 @@
     function initCounterAnimation() {
         $('.counter').each(function() {
             const $counter = $(this);
-            const target = parseInt($counter.text());
+            const target = parseInt($counter.text()) || 0;
+            
+            if (target <= 0) return; // Geçersiz değer kontrolü
+            
             const duration = 2000; // 2 saniye
             const increment = target / (duration / 16); // 60 FPS
             let current = 0;
@@ -329,6 +339,8 @@
             e.preventDefault();
             const target = $(this).data('target');
             
+            if (!target) return; // Target kontrolü
+            
             // Aktif tab'ı değiştir
             $('.tab-trigger').removeClass('active');
             $(this).addClass('active');
@@ -348,6 +360,8 @@
             const $content = $trigger.next('.accordion-content');
             const $accordion = $trigger.closest('.accordion');
             
+            if (!$content.length) return; // Content kontrolü
+            
             // Diğer accordion'ları kapat
             $accordion.find('.accordion-content').not($content).slideUp();
             $accordion.find('.accordion-trigger').not($trigger).removeClass('active');
@@ -366,6 +380,9 @@
         $('.modal-trigger').on('click', function(e) {
             e.preventDefault();
             const target = $(this).data('target');
+            
+            if (!target) return; // Target kontrolü
+            
             $(target).fadeIn(300);
             $('body').css('overflow', 'hidden');
         });
@@ -400,7 +417,7 @@
             // Gerekli alanları kontrol et
             $form.find('[required]').each(function() {
                 const $field = $(this);
-                const value = $field.val().trim();
+                const value = $field.val() ? $field.val().trim() : '';
                 
                 if (!value) {
                     $field.addClass('error');
@@ -413,7 +430,7 @@
             // Email validasyonu
             $form.find('input[type="email"]').each(function() {
                 const $field = $(this);
-                const value = $field.val().trim();
+                const value = $field.val() ? $field.val().trim() : '';
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 
                 if (value && !emailRegex.test(value)) {
@@ -426,7 +443,7 @@
             
             if (isValid) {
                 // Form gönderimi
-                console.log('Form geçerli, gönderiliyor...');
+                // Form geçerli, gönderiliyor...
                 // Burada AJAX ile form gönderimi yapılabilir
             }
         });

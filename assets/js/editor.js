@@ -300,9 +300,10 @@
             
             const $button = $(this);
             const $widget = $button.closest('.elementor-element');
-            const urlInput = $widget.find('input[data-setting="link_url"]').val();
+            const $urlInput = $widget.find('input[data-setting="link_url"]');
+            const urlInput = $urlInput.length ? $urlInput.val() : '';
             
-            if (!urlInput) {
+            if (!urlInput || urlInput.trim() === '') {
                 showStatusMessage('Lütfen önce bir URL girin', 'error');
                 return;
             }
@@ -336,7 +337,7 @@
                     url: urlInput,
                     nonce: elementorCommon.config.ajax.nonce
                 },
-                timeout: 15000, // 15 saniye timeout (döngüyü engellemek için kısaltıldı)
+                    timeout: 30000, // 30 saniye timeout
                 success: function(response) {
                     if (response.success) {
                         const data = response.data;
@@ -370,9 +371,6 @@
                         
                         if (data.image) {
                             successDetails += ' | Resim: Var';
-                            if (data.image_optimized) {
-                                successDetails += ' (Optimize edildi)';
-                            }
                         } else {
                             successDetails += ' | Resim: Yok';
                         }
@@ -431,8 +429,8 @@
                     
                     // Debug bilgileri ekle
                     errorDetails += '\n\nDebug Bilgileri:';
-                    errorDetails += '\nStatus: ' + status;
-                    errorDetails += '\nError: ' + error;
+                    errorDetails += '\nStatus: ' + (status || 'Bilinmiyor');
+                    errorDetails += '\nError: ' + (error || 'Bilinmiyor');
                     errorDetails += '\nResponse: ' + (xhr.responseText ? xhr.responseText.substring(0, 200) + '...' : 'Boş yanıt');
                     
                     showStatusMessage(errorMessage, 'error', errorDetails);
@@ -518,7 +516,7 @@
      */
     $(document).on('elementor/frontend/init', function() {
         // Frontend yüklendiğinde çalışacak kodlar
-        console.log('Elementor Özel Tasarım Widget\'ları frontend\'de yüklendi');
+        // Elementor Özel Tasarım Widget'ları frontend'de yüklendi
     });
 
     /**
@@ -526,7 +524,7 @@
      */
     $(document).on('elementor/editor/init', function() {
         // Editör yüklendiğinde çalışacak kodlar
-        console.log('Elementor Özel Tasarım Widget\'ları editörde yüklendi');
+        // Elementor Özel Tasarım Widget'ları editörde yüklendi
         initLinkMetaCekme();
     });
 

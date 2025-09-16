@@ -110,10 +110,12 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
             [
                 'label' => __('Başlık', 'elementor-ozel-tasarim'),
                 'type' => \Elementor\Controls_Manager::TEXT,
-                'placeholder' => __('Başlık burada görünecek', 'elementor-ozel-tasarim'),
+                'placeholder' => __('Başlık burada görünecek veya URL\'den otomatik çekilecek', 'elementor-ozel-tasarim'),
+                'default' => '',
                 'dynamic' => [
                     'active' => true,
                 ],
+                'description' => __('Boş bırakırsanız URL\'den otomatik çekilir', 'elementor-ozel-tasarim'),
             ]
         );
 
@@ -122,10 +124,12 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
             [
                 'label' => __('Açıklama', 'elementor-ozel-tasarim'),
                 'type' => \Elementor\Controls_Manager::TEXTAREA,
-                'placeholder' => __('Açıklama burada görünecek', 'elementor-ozel-tasarim'),
+                'placeholder' => __('Açıklama burada görünecek veya URL\'den otomatik çekilecek', 'elementor-ozel-tasarim'),
+                'default' => '',
                 'dynamic' => [
                     'active' => true,
                 ],
+                'description' => __('Boş bırakırsanız URL\'den otomatik çekilir', 'elementor-ozel-tasarim'),
             ]
         );
 
@@ -508,6 +512,22 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
     }
 
     /**
+     * Meta değer öncelik sırasına göre al
+     */
+    private function get_meta_value($manual_value, $auto_value, $default_value) {
+        // Önce manuel değer, sonra otomatik çekilen, son olarak varsayılan
+        if (!empty($manual_value)) {
+            return $manual_value;
+        }
+        
+        if (!empty($auto_value)) {
+            return $auto_value;
+        }
+        
+        return $default_value;
+    }
+
+    /**
      * Resim özelliklerini al
      */
     private function get_image_attributes($image_url, $alt_text, $settings) {
@@ -731,14 +751,52 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
         $target = $settings['link_url']['is_external'] ? ' target="_blank"' : '';
         $nofollow = $settings['link_url']['nofollow'] ? ' rel="nofollow"' : '';
 
-        // Meta verileri hazırla
-        $meta_data = [
-            'title' => !empty($settings['baslik']) ? $settings['baslik'] : __('Başlık Bulunamadı', 'elementor-ozel-tasarim'),
-            'description' => !empty($settings['aciklama']) ? $settings['aciklama'] : __('Açıklama bulunamadı.', 'elementor-ozel-tasarim'),
-            'image' => !empty($settings['resim_url']['url']) ? $settings['resim_url']['url'] : '',
-            'url' => $url,
-            'domain' => parse_url($url, PHP_URL_HOST)
+        // Debug: Ayarları kontrol et
+        $debug_info = [
+            'baslik' => $settings['baslik'] ?? 'YOK',
+            'aciklama' => $settings['aciklama'] ?? 'YOK',
+            'resim_url' => $settings['resim_url']['url'] ?? 'YOK',
+            'link_url' => $url
         ];
+        
+        // Eğer başlık veya açıklama boşsa, URL'den otomatik çekmeyi dene
+        $auto_fetched_data = null;
+        $needs_auto_fetch = empty($settings['baslik']) || empty($settings['aciklama']);
+        
+        if ($needs_auto_fetch) {
+            $auto_fetched_data = $this->get_meta_data($url);
+        }
+        
+        // Meta verileri hazırla - önce manuel değerler, sonra otomatik çekilen, son olarak varsayılan
+        $domain = parse_url($url, PHP_URL_HOST);
+        $meta_data = [
+            'title' => $this->get_meta_value($settings['baslik'], $auto_fetched_data['title'] ?? '', $domain ? $domain . ' - ' . __('Başlık Bulunamadı', 'elementor-ozel-tasarim') : __('Başlık Bulunamadı', 'elementor-ozel-tasarim')),
+            'description' => $this->get_meta_value($settings['aciklama'], $auto_fetched_data['description'] ?? '', __('Bu sayfa için açıklama bulunamadı. Lütfen "Veri Çek" butonuna basın veya manuel olarak girin.', 'elementor-ozel-tasarim')),
+            'image' => $this->get_meta_value($settings['resim_url']['url'] ?? '', $auto_fetched_data['image'] ?? '', ''),
+            'url' => $url,
+            'domain' => $domain
+        ];
+        
+        // Debug bilgilerini göster (sadece admin için)
+        if (current_user_can('manage_options') && isset($_GET['debug']) && $_GET['debug'] === '1') {
+            echo '<div style="background: #f0f0f1; padding: 15px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px;">';
+            echo '<h4 style="margin-top: 0; color: #0073aa;">🔍 Debug Bilgileri</h4>';
+            echo '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
+            echo '<div>';
+            echo '<h5>📝 Manuel Ayarlar:</h5>';
+            echo '<pre style="background: #fff; padding: 10px; border-radius: 3px; font-size: 12px;">' . print_r($debug_info, true) . '</pre>';
+            echo '</div>';
+            if ($auto_fetched_data) {
+                echo '<div>';
+                echo '<h5>🤖 Otomatik Çekilen Veri:</h5>';
+                echo '<pre style="background: #fff; padding: 10px; border-radius: 3px; font-size: 12px;">' . print_r($auto_fetched_data, true) . '</pre>';
+                echo '</div>';
+            }
+            echo '</div>';
+            echo '<h5>✅ Final Meta Data:</h5>';
+            echo '<pre style="background: #fff; padding: 10px; border-radius: 3px; font-size: 12px;">' . print_r($meta_data, true) . '</pre>';
+            echo '</div>';
+        }
 
         // Eğer resim yoksa varsayılan resmi kullan
         if (empty($meta_data['image']) && !empty($settings['varsayilan_resim_url']['url'])) {

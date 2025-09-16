@@ -3,7 +3,7 @@
  * Plugin Name: Elementor Özel Tasarım Widget'ları
  * Plugin URI: https://veyselgokberkguler.com.tr/elementor-ozel-tasarim-widgetlari
  * Description: Elementor için özel tasarım widget'ları oluşturan plugin
- * Version: 1.0.6
+ * Version: 1.0.7
  * GitHub Plugin URI: gokberkglr/elementor-ozel-tasarim
  * Author: gokberkglr
  * Author URI: https://veyselgokberkguler.com.tr
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin sabitleri
-define('ELEMENTOR_OZEL_TASARIM_VERSION', '1.0.6');
+define('ELEMENTOR_OZEL_TASARIM_VERSION', '1.0.7');
 define('ELEMENTOR_OZEL_TASARIM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
