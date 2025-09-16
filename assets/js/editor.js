@@ -342,8 +342,8 @@
                         const data = response.data;
                         
                         // Çekilen veriyi form alanlarına doldur
-                        const $baslikInput = $widget.find('input[data-setting="cekilen_baslik"]');
-                        const $aciklamaInput = $widget.find('textarea[data-setting="cekilen_aciklama"]');
+                        const $baslikInput = $widget.find('input[data-setting="baslik"]');
+                        const $aciklamaInput = $widget.find('textarea[data-setting="aciklama"]');
                         
                         if ($baslikInput.length) {
                             $baslikInput.val(data.title).trigger('input');
@@ -354,14 +354,8 @@
                         }
                         
                         if (data.image) {
-                            // Resim alanını güncelle
-                            const $imageInput = $widget.find('input[data-setting="cekilen_resim"]');
-                            if ($imageInput.length) {
-                                $imageInput.val(data.image).trigger('change');
-                            }
-                            
                             // Elementor media control'ünü güncelle
-                            const $mediaControl = $widget.find('.elementor-control-media');
+                            const $mediaControl = $widget.find('.elementor-control-media[data-setting="resim"]');
                             if ($mediaControl.length) {
                                 // Media control'ün değerini güncelle
                                 const mediaData = {
@@ -372,7 +366,7 @@
                                 
                                 // Elementor'un media control API'sini kullan
                                 if (typeof elementor !== 'undefined' && elementor.controls) {
-                                    const control = elementor.controls.getControl($mediaControl.data('setting'));
+                                    const control = elementor.controls.getControl('resim');
                                     if (control) {
                                         control.setValue(mediaData);
                                     }
@@ -476,6 +470,7 @@
             });
         });
     }
+
 
     /**
      * Durum mesajı göster

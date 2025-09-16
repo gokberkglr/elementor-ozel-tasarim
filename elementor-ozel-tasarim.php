@@ -3,7 +3,7 @@
  * Plugin Name: Elementor Özel Tasarım Widget'ları
  * Plugin URI: https://veyselgokberkguler.com.tr/elementor-ozel-tasarim-widgetlari
  * Description: Elementor için özel tasarım widget'ları oluşturan plugin
- * Version: 1.0.4
+ * Version: 1.0.5
  * GitHub Plugin URI: gokberkglr/elementor-ozel-tasarim
  * Author: gokberkglr
  * Author URI: https://veyselgokberkguler.com.tr
@@ -190,28 +190,16 @@ class ElementorOzelTasarim {
         $meta_data = $widget->get_meta_data($url);
         
         if ($meta_data && !empty($meta_data['title'])) {
-            // Resim URL'sini optimize et
-            $optimized_image = '';
-            if (!empty($meta_data['image'])) {
-                $optimized_image = $widget->optimize_image($meta_data['image'], [
-                    'resim_optimizasyonu' => 'yes',
-                    'resim_kalitesi' => ['size' => 85],
-                    'webp_destegi' => 'yes'
-                ]);
-            }
-            
             // Başarılı çekme bilgileri
             $response_data = [
                 'title' => $meta_data['title'],
                 'description' => $meta_data['description'],
-                'image' => $optimized_image ?: $meta_data['image'],
-                'original_image' => $meta_data['image'],
+                'image' => $meta_data['image'],
                 'url' => $meta_data['url'],
                 'domain' => $meta_data['domain'],
                 'debug' => $debug_info,
                 'success' => true,
-                'message' => 'Meta veriler başarıyla çekildi',
-                'image_optimized' => !empty($optimized_image) && $optimized_image !== $meta_data['image']
+                'message' => 'Meta veriler başarıyla çekildi'
             ];
             wp_send_json_success($response_data);
         } else {

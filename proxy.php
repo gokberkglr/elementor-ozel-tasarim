@@ -51,34 +51,53 @@ if (in_array($host, ['localhost', '127.0.0.1', '0.0.0.0']) ||
 }
 
 // Resim isteği yap
-$response = wp_remote_get($url, [
-    'timeout' => 30,
-    'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'headers' => [
-        'Accept' => 'image/*,*/*;q=0.8',
-        'Accept-Language' => 'tr-TR,tr;q=0.9,en;q=0.8',
-        'Accept-Encoding' => 'gzip, deflate, br',
-        'Cache-Control' => 'no-cache',
-        'Connection' => 'keep-alive',
-        'Upgrade-Insecure-Requests' => '1'
-    ],
-    'sslverify' => false,
-    'redirection' => 5
+$context = stream_context_create([
+    'http' => [
+        'method' => 'GET',
+        'timeout' => 30,
+        'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'header' => [
+            'Accept: image/*,*/*;q=0.8',
+            'Accept-Language: tr-TR,tr;q=0.9,en;q=0.8',
+            'Accept-Encoding: gzip, deflate, br',
+            'Cache-Control: no-cache',
+            'Connection: keep-alive',
+            'Upgrade-Insecure-Requests: 1'
+        ],
+        'follow_location' => true,
+        'max_redirects' => 5
+    ]
 ]);
 
-if (is_wp_error($response)) {
+$response = file_get_contents($url, false, $context);
+
+if ($response === false) {
     http_response_code(500);
-    die('Failed to fetch image: ' . $response->get_error_message());
+    die('Failed to fetch image');
 }
 
-$response_code = wp_remote_retrieve_response_code($response);
+// HTTP başlıklarını al
+$headers = $http_response_header ?? [];
+$response_code = 200;
+$content_type = '';
+
+foreach ($headers as $header) {
+    if (strpos($header, 'HTTP/') === 0) {
+        preg_match('/HTTP\/\d\.\d\s+(\d+)/', $header, $matches);
+        if (isset($matches[1])) {
+            $response_code = (int)$matches[1];
+        }
+    } elseif (stripos($header, 'content-type:') === 0) {
+        $content_type = trim(substr($header, 13));
+    }
+}
+
 if ($response_code !== 200) {
     http_response_code($response_code);
     die('HTTP Error: ' . $response_code);
 }
 
-$body = wp_remote_retrieve_body($response);
-$content_type = wp_remote_retrieve_header($response, 'content-type');
+$body = $response;
 
 if (empty($body)) {
     http_response_code(404);

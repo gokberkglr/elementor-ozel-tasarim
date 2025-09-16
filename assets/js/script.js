@@ -147,6 +147,9 @@
                             img.src = img.dataset.webp;
                         } else if (img.dataset.src) {
                             img.src = img.dataset.src;
+                        } else if (img.src) {
+                            // Zaten src varsa kullan
+                            img.classList.remove('lazy');
                         }
                         
                         img.classList.remove('lazy');
@@ -168,13 +171,12 @@
      * WebP desteği kontrolü
      */
     function supportsWebP() {
-        return new Promise((resolve) => {
-            const webP = new Image();
-            webP.onload = webP.onerror = function() {
-                resolve(webP.height === 2);
-            };
-            webP.src = 'data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA';
-        });
+        const webP = new Image();
+        webP.onload = webP.onerror = function() {
+            return webP.height === 2;
+        };
+        webP.src = 'data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA';
+        return false; // Varsayılan olarak false döndür
     }
 
     /**
