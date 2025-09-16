@@ -3,7 +3,7 @@
  * Plugin Name: Elementor Özel Tasarım Widget'ları
  * Plugin URI: https://veyselgokberkguler.com.tr/elementor-ozel-tasarim-widgetlari
  * Description: Elementor için özel tasarım widget'ları oluşturan plugin
- * Version: 1.0.5
+ * Version: 1.0.6
  * GitHub Plugin URI: gokberkglr/elementor-ozel-tasarim
  * Author: gokberkglr
  * Author URI: https://veyselgokberkguler.com.tr
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin sabitleri
-define('ELEMENTOR_OZEL_TASARIM_VERSION', '1.0.4');
+define('ELEMENTOR_OZEL_TASARIM_VERSION', '1.0.6');
 define('ELEMENTOR_OZEL_TASARIM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -78,6 +78,9 @@ class ElementorOzelTasarim {
         // AJAX handler'ları
         add_action('wp_ajax_ozel_link_meta_cek', array($this, 'ajax_link_meta_cek'));
         add_action('wp_ajax_nopriv_ozel_link_meta_cek', array($this, 'ajax_link_meta_cek'));
+        
+        // Admin panelinde version bilgilerini göster
+        add_action('admin_notices', array($this, 'show_version_info'));
     }
 
     /**
@@ -109,14 +112,33 @@ class ElementorOzelTasarim {
     }
 
     /**
+     * Cache busting version oluştur
+     */
+    private function get_file_version($file_path) {
+        $version = ELEMENTOR_OZEL_TASARIM_VERSION;
+        
+        if (file_exists($file_path)) {
+            $file_time = filemtime($file_path);
+            $file_size = filesize($file_path);
+            // Dosya zamanı ve boyutunu birleştirerek unique version oluştur
+            $version = ELEMENTOR_OZEL_TASARIM_VERSION . '.' . $file_time . '.' . substr(md5($file_size), 0, 8);
+        }
+        
+        return $version;
+    }
+
+    /**
      * Frontend stil dosyalarını yükle
      */
     public function enqueue_styles() {
+        $css_file = ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH . 'assets/css/style.css';
+        $version = $this->get_file_version($css_file);
+        
         wp_enqueue_style(
             'elementor-ozel-tasarim-style',
             ELEMENTOR_OZEL_TASARIM_PLUGIN_URL . 'assets/css/style.css',
             array(),
-            ELEMENTOR_OZEL_TASARIM_VERSION
+            $version
         );
     }
 
@@ -124,11 +146,14 @@ class ElementorOzelTasarim {
      * Frontend script dosyalarını yükle
      */
     public function enqueue_scripts() {
+        $js_file = ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH . 'assets/js/script.js';
+        $version = $this->get_file_version($js_file);
+        
         wp_enqueue_script(
             'elementor-ozel-tasarim-script',
             ELEMENTOR_OZEL_TASARIM_PLUGIN_URL . 'assets/js/script.js',
             array('jquery'),
-            ELEMENTOR_OZEL_TASARIM_VERSION,
+            $version,
             true
         );
     }
@@ -137,11 +162,14 @@ class ElementorOzelTasarim {
      * Editor script dosyalarını yükle
      */
     public function enqueue_editor_scripts() {
+        $js_file = ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH . 'assets/js/editor.js';
+        $version = $this->get_file_version($js_file);
+        
         wp_enqueue_script(
             'elementor-ozel-tasarim-editor',
             ELEMENTOR_OZEL_TASARIM_PLUGIN_URL . 'assets/js/editor.js',
             array('jquery'),
-            ELEMENTOR_OZEL_TASARIM_VERSION,
+            $version,
             true
         );
     }
@@ -222,6 +250,36 @@ class ElementorOzelTasarim {
             ];
             wp_send_json_error($error_data);
         }
+    }
+
+    /**
+     * Admin panelinde version bilgilerini göster
+     */
+    public function show_version_info() {
+        // Sadece admin sayfalarında ve belirli koşullarda göster
+        if (!current_user_can('manage_options') || !isset($_GET['page']) || strpos($_GET['page'], 'elementor') === false) {
+            return;
+        }
+        
+        // Cache busting bilgilerini al
+        $css_file = ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH . 'assets/css/style.css';
+        $js_file = ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH . 'assets/js/script.js';
+        $editor_js_file = ELEMENTOR_OZEL_TASARIM_PLUGIN_PATH . 'assets/js/editor.js';
+        
+        $css_version = $this->get_file_version($css_file);
+        $js_version = $this->get_file_version($js_file);
+        $editor_js_version = $this->get_file_version($editor_js_file);
+        
+        echo '<div class="notice notice-info is-dismissible">';
+        echo '<p><strong>🚀 Elementor Özel Tasarım Widget\'ları v' . ELEMENTOR_OZEL_TASARIM_VERSION . '</strong></p>';
+        echo '<p><strong>📁 Cache Busting Bilgileri:</strong></p>';
+        echo '<div style="background: #f0f0f1; padding: 10px; border-radius: 4px; margin: 10px 0;">';
+        echo '<p style="margin: 0;"><strong>CSS:</strong> <code>' . $css_version . '</code></p>';
+        echo '<p style="margin: 5px 0 0 0;"><strong>JS:</strong> <code>' . $js_version . '</code></p>';
+        echo '<p style="margin: 5px 0 0 0;"><strong>Editor JS:</strong> <code>' . $editor_js_version . '</code></p>';
+        echo '</div>';
+        echo '<p style="margin: 10px 0 0 0;"><em>💡 Bu version numaraları dosya değişiklik zamanı + boyut hash\'i içerir. Dosyalar güncellendiğinde otomatik olarak değişir.</em></p>';
+        echo '</div>';
     }
 
     /**

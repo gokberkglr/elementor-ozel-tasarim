@@ -130,21 +130,33 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
         );
 
         $this->add_control(
-            'resim',
+            'resim_url',
             [
-                'label' => __('Resim', 'elementor-ozel-tasarim'),
-                'type' => \Elementor\Controls_Manager::MEDIA,
-                'dynamic' => [
-                    'active' => true,
+                'label' => __('Resim URL', 'elementor-ozel-tasarim'),
+                'type' => \Elementor\Controls_Manager::URL,
+                'placeholder' => __('https://example.com/resim.jpg', 'elementor-ozel-tasarim'),
+                'show_external' => true,
+                'default' => [
+                    'url' => '',
+                    'is_external' => true,
+                    'nofollow' => true,
                 ],
+                'description' => __('Resim linkini buraya girin', 'elementor-ozel-tasarim'),
             ]
         );
 
         $this->add_control(
-            'varsayilan_resim',
+            'varsayilan_resim_url',
             [
-                'label' => __('Varsayılan Resim (Resim yoksa gösterilir)', 'elementor-ozel-tasarim'),
-                'type' => \Elementor\Controls_Manager::MEDIA,
+                'label' => __('Varsayılan Resim URL (Resim yoksa gösterilir)', 'elementor-ozel-tasarim'),
+                'type' => \Elementor\Controls_Manager::URL,
+                'placeholder' => __('https://example.com/varsayilan-resim.jpg', 'elementor-ozel-tasarim'),
+                'show_external' => true,
+                'default' => [
+                    'url' => '',
+                    'is_external' => true,
+                    'nofollow' => true,
+                ],
                 'description' => __('Resim çekilemezse veya yoksa bu resim gösterilir', 'elementor-ozel-tasarim'),
             ]
         );
@@ -505,8 +517,12 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
             'class' => 'ozel-link-meta-resim-img'
         ];
         
-        // Lazy loading
-        if ($settings['lazy_loading'] === 'yes') {
+        // Lazy loading - varsayılan olarak aktif
+        if (isset($settings['lazy_loading']) && $settings['lazy_loading'] === 'yes') {
+            $attributes['loading'] = 'lazy';
+            $attributes['decoding'] = 'async';
+        } else {
+            // Varsayılan olarak lazy loading aktif
             $attributes['loading'] = 'lazy';
             $attributes['decoding'] = 'async';
         }
@@ -705,22 +721,28 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
             return;
         }
 
-        $url = $settings['link_url']['url'];
+        $url = esc_url_raw($settings['link_url']['url']);
+        
+        // URL validasyonu
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            echo '<p>' . __('Geçersiz URL formatı.', 'elementor-ozel-tasarim') . '</p>';
+            return;
+        }
         $target = $settings['link_url']['is_external'] ? ' target="_blank"' : '';
         $nofollow = $settings['link_url']['nofollow'] ? ' rel="nofollow"' : '';
 
         // Meta verileri hazırla
         $meta_data = [
-            'title' => $settings['baslik'] ?: __('Başlık Bulunamadı', 'elementor-ozel-tasarim'),
-            'description' => $settings['aciklama'] ?: __('Açıklama bulunamadı.', 'elementor-ozel-tasarim'),
-            'image' => !empty($settings['resim']['url']) ? $settings['resim']['url'] : '',
+            'title' => !empty($settings['baslik']) ? $settings['baslik'] : __('Başlık Bulunamadı', 'elementor-ozel-tasarim'),
+            'description' => !empty($settings['aciklama']) ? $settings['aciklama'] : __('Açıklama bulunamadı.', 'elementor-ozel-tasarim'),
+            'image' => !empty($settings['resim_url']['url']) ? $settings['resim_url']['url'] : '',
             'url' => $url,
             'domain' => parse_url($url, PHP_URL_HOST)
         ];
 
         // Eğer resim yoksa varsayılan resmi kullan
-        if (empty($meta_data['image']) && !empty($settings['varsayilan_resim']['url'])) {
-            $meta_data['image'] = $settings['varsayilan_resim']['url'];
+        if (empty($meta_data['image']) && !empty($settings['varsayilan_resim_url']['url'])) {
+            $meta_data['image'] = $settings['varsayilan_resim_url']['url'];
         }
 
         // Resim URL'sini direkt kullan
@@ -783,10 +805,10 @@ class ElementorOzelLinkMetaWidget extends \Elementor\Widget_Base {
             var description = '';
             
             // Resim URL'sini belirle
-            if (settings.resim && settings.resim.url) {
-                imageUrl = settings.resim.url;
-            } else if (settings.varsayilan_resim && settings.varsayilan_resim.url) {
-                imageUrl = settings.varsayilan_resim.url;
+            if (settings.resim_url && settings.resim_url.url) {
+                imageUrl = settings.resim_url.url;
+            } else if (settings.varsayilan_resim_url && settings.varsayilan_resim_url.url) {
+                imageUrl = settings.varsayilan_resim_url.url;
             }
             
             title = settings.baslik || 'Başlık Bulunamadı';

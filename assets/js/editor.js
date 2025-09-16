@@ -354,35 +354,10 @@
                         }
                         
                         if (data.image) {
-                            // Elementor media control'ünü güncelle
-                            const $mediaControl = $widget.find('.elementor-control-media[data-setting="resim"]');
-                            if ($mediaControl.length) {
-                                // Media control'ün değerini güncelle
-                                const mediaData = {
-                                    id: 0,
-                                    url: data.image,
-                                    alt: data.title || ''
-                                };
-                                
-                                // Elementor'un media control API'sini kullan
-                                if (typeof elementor !== 'undefined' && elementor.controls) {
-                                    const control = elementor.controls.getControl('resim');
-                                    if (control) {
-                                        control.setValue(mediaData);
-                                    }
-                                }
-                                
-                                // Resim önizlemesini güncelle
-                                const $imagePreview = $mediaControl.find('.elementor-control-media__preview img');
-                                if ($imagePreview.length) {
-                                    $imagePreview.attr('src', data.image);
-                                } else {
-                                    // Önizleme yoksa oluştur
-                                    const $previewContainer = $mediaControl.find('.elementor-control-media__preview');
-                                    if ($previewContainer.length) {
-                                        $previewContainer.html('<img src="' + data.image + '" alt="' + (data.title || '') + '">');
-                                    }
-                                }
+                            // Resim URL input alanını güncelle
+                            const $resimUrlInput = $widget.find('input[data-setting="resim_url"]');
+                            if ($resimUrlInput.length) {
+                                $resimUrlInput.val(data.image).trigger('input');
                             }
                         }
                         
